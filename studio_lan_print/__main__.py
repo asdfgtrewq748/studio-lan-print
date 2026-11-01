@@ -9,7 +9,7 @@ from .server import IPPServer
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="studio_lan_print", description="LAN IPP print gateway for HP LaserJet Professional P1108")
+    parser = argparse.ArgumentParser(prog="studio_lan_print", description="Experimental LAN IPP gateway. The supported configurable service is ps/StudioLanPrint.ps1.")
     parser.add_argument("--host", default=CONFIG.host, help="bind host (default 0.0.0.0)")
     parser.add_argument("--port", type=int, default=CONFIG.port, help="bind port (default 631)")
     parser.add_argument("--printer", default=CONFIG.printer_name, help="Windows printer name")

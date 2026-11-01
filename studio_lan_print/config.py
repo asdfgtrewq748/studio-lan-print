@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+# Sample defaults from the original studio P1108 setup.
+# The supported configurable service is ps/StudioLanPrint.ps1.
 @dataclass
 class Config:
     host: str = "0.0.0.0"

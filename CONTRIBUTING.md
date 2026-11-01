@@ -1,14 +1,15 @@
 # Contributing
 
-## Scope of v0.1
+## Scope
 
-This release is the **studio-shaped** edition that already runs in our lab:
+The supported deploy is the PowerShell service in `ps/`. It shares a Windows-installed local printer over IPP and mDNS.
 
-- Windows host + USB **HP LaserJet Professional P1108**
-- IPP on TCP **8631**, Bonjour-style mDNS name **Studio-HP-LAN**
-- Client fallback hard-codes studio LAN IP **10.4.81.41**
+- Printer queue, IPP port, mDNS instance name, and optional display name come from `%ProgramData%\StudioLanPrint\config.json`. Environment variables override that file for the current process.
+- An empty `printerName` prefers **HP LaserJet Professional P1108** when that queue exists, otherwise the first suitable local printer.
+- Studio reference values remain the defaults: port **8631**, mDNS **Studio-HP-LAN**, client example `http://10.4.81.41:8631/ipp/print`.
+- Authentication and TLS are out of scope.
 
-Config generalization (arbitrary printer name / port / IP, installer UX, auth) is **next**, not in this first publish.
+`studio_lan_print/` is an experimental Python alternate (default port 631 there); do not treat it as the supported deploy.
 
 ## What helps
 
@@ -24,5 +25,5 @@ Config generalization (arbitrary printer name / port / IP, installer UX, auth) i
 
 ## Dev notes
 
-Production path: `ps/StudioLanPrint.ps1` + `Install-StudioLanPrint.ps1`.  
-`studio_lan_print/` is an experimental Python alternate (default port 631 there); do not treat it as the supported deploy.
+Production path: `ps/StudioLanPrint.ps1`, `ps/StudioLanPrint.Config.ps1`, and `Install-StudioLanPrint.ps1`.  
+Config template: `ps/config.example.json`. Client defaults: `client/config.json`.
