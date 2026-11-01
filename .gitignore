@@ -1,0 +1,30 @@
+# Vendor / redistributables (download yourself)
+vendor/*.exe
+vendor/*.zip
+**/SumatraPDF.exe
+**/SumatraPDF*.exe
+**/Acrobat.exe
+
+# Encoded dumps / probes / AI scratch
+*.b64
+deepseek_*
+*.bin
+missing.json
+
+# Runtime / local
+logs/
+jobs/
+*.log
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
+Thumbs.db
+
+# Local secrets / machine-only
+*.uuid
+printer.uuid
+local.env
+secrets.*
