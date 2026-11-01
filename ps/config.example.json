@@ -1,0 +1,8 @@
+{
+  "_comment": "Host config for StudioLanPrint. printerName is the exact Windows queue from Get-Printer. Leave it empty to auto-select: prefer HP LaserJet Professional P1108 when that queue exists, otherwise the first suitable local printer (lowest USB port, then any other local non-virtual queue). If none can be selected the service exits and lists installed printers. port is the IPP TCP port. serviceInstance is the mDNS instance name and must be one DNS label (default Studio-HP-LAN). displayName is optional IPP/mDNS text; empty keeps the built-in label. fallbackLanIp is used only when no LAN IPv4 address is detected. Environment overrides, which win over this file: STUDIO_LAN_PRINTER, STUDIO_LAN_PORT, STUDIO_LAN_SERVICE, STUDIO_LAN_DISPLAY, STUDIO_LAN_FALLBACK_IP. Restart the service after edits. The logon shortcut reads this file and does not keep temporary shell variables. Changing port requires re-running the installer so the URL ACL and firewall follow. Studio reference, validated with the HP LaserJet Professional P1108: port 8631, serviceInstance Studio-HP-LAN, fallbackLanIp 10.4.81.41. 打印机名留空则自动选择。改完需重启；改端口后要重跑安装脚本。",
+  "printerName": "",
+  "port": 8631,
+  "serviceInstance": "Studio-HP-LAN",
+  "displayName": "",
+  "fallbackLanIp": "10.4.81.41"
+}

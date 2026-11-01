@@ -1,0 +1,7 @@
+{
+  "_comment": "Client defaults are the original studio reference. Change host, port, printerUrl, or displayName for another share. A non-empty printerUrl overrides host and port. Command-line -HostIp -Port -PrinterUrl -DisplayName and environment variables STUDIO_LAN_HOST, STUDIO_LAN_PORT, STUDIO_LAN_PRINTER_URL, STUDIO_LAN_DISPLAY override this file. Values with spaces belong in this file. The bat forwards command-line arguments across the admin prompt. 工作室参考地址可改，不必改脚本。",
+  "host": "10.4.81.41",
+  "port": 8631,
+  "printerUrl": "",
+  "displayName": "Studio-HP-LAN"
+}

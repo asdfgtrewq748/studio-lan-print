@@ -1,6 +1,7 @@
-# StudioLanPrint.ps1 - LAN IPP gateway for HP LaserJet Professional P1108
-# Client URL: http://10.4.81.41:8631/ipp/print
-# mDNS: Studio-HP-LAN._ipp._tcp.local on UDP 5353
+# StudioLanPrint.ps1 - LAN IPP + mDNS share for a local Windows printer.
+# Config: %ProgramData%\StudioLanPrint\config.json (see config.example.json).
+# Empty printerName prefers "HP LaserJet Professional P1108", else the first suitable local printer.
+# Studio reference: http://10.4.81.41:8631/ipp/print and Studio-HP-LAN._ipp._tcp.local.
 # Logs: %ProgramData%\StudioLanPrint\logs\service.log
 
 $ErrorActionPreference = 'Stop'
@@ -8,8 +9,9 @@ $script:BaseDir = Join-Path $env:ProgramData 'StudioLanPrint'
 $script:JobsDir = Join-Path $script:BaseDir 'jobs'
 $script:LogsDir = Join-Path $script:BaseDir 'logs'
 $script:LogFile = Join-Path $script:LogsDir 'service.log'
-$script:PrinterName = 'HP LaserJet Professional P1108'
+$script:PrinterName = ''
 $script:Port = 8631
+$script:FallbackLanIp = '10.4.81.41'
 $script:JobSeq = 0
 # Optional PDF fallback (studio-specific path). Prefer SumatraPDF next to the install.
 # Override with env STUDIO_LAN_ACROBAT if you must use Acrobat.
@@ -22,6 +24,8 @@ if (-not (Test-Path -LiteralPath $script:Sumatra)) {
 $script:Queue = [System.Collections.Concurrent.ConcurrentQueue[object]]::new()
 $script:ServiceInstance = 'Studio-HP-LAN'
 $script:MdnsHost = 'studio-hp-lan'
+$script:DisplayName = ''
+$script:Identity = $null
 $script:Mdns = $null
 $script:StartTick = [Environment]::TickCount
 $script:UuidFile = Join-Path $script:BaseDir 'printer.uuid'
@@ -49,6 +53,32 @@ function Write-Log {
     Write-Host $line
 }
 
+$libCandidates = @()
+if ($PSScriptRoot) { $libCandidates += (Join-Path $PSScriptRoot 'StudioLanPrint.Config.ps1') }
+$libCandidates += (Join-Path $script:BaseDir 'StudioLanPrint.Config.ps1')
+$configLib = $null
+foreach ($candidate in $libCandidates) {
+    if ($candidate -and (Test-Path -LiteralPath $candidate)) { $configLib = $candidate; break }
+}
+if (-not $configLib) {
+    throw 'StudioLanPrint.Config.ps1 not found next to StudioLanPrint.ps1. Re-run Install-StudioLanPrint.ps1.'
+}
+. $configLib
+try {
+    $script:Identity = Get-StudioLanPrintIdentity
+} catch {
+    Write-Log $_.Exception.Message 'ERROR'
+    throw
+}
+$script:PrinterName = [string]$script:Identity.PrinterName
+$script:Port = [int]$script:Identity.Port
+$script:ServiceInstance = [string]$script:Identity.ServiceInstance
+$script:MdnsHost = [string]$script:Identity.MdnsHost
+$script:DisplayName = [string]$script:Identity.DisplayName
+$script:FallbackLanIp = [string]$script:Identity.FallbackLanIp
+$cfgState = if ($script:Identity.ConfigPresent) { 'loaded' } else { 'defaults' }
+Write-Log ("config $($script:Identity.ConfigPath) ($cfgState) printer=$($script:PrinterName) source=$($script:Identity.PrinterSource) port=$($script:Port) service=$($script:ServiceInstance) display=$($script:DisplayName)")
+
 function Get-LanIPv4 {
     try {
         $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
@@ -63,7 +93,7 @@ function Get-LanIPv4 {
             Select-Object -First 1).IPAddress
         if ($ip) { return $ip }
     } catch {}
-    return '10.4.81.41'
+    return $script:FallbackLanIp
 }
 
 Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
@@ -124,7 +154,7 @@ using System.Threading;
 
 public class StudioMdnsPublisher : IDisposable {
   readonly string _logPath;
-  readonly string _instance;   // Studio-HP-LAN
+  readonly string _instance;   // DNS-SD instance label, default Studio-HP-LAN
   readonly string _hostLabel;  // studio-hp-lan
   readonly int _ippPort;
   string _ipv4;
@@ -166,7 +196,7 @@ public class StudioMdnsPublisher : IDisposable {
   static byte[] EncTxt(string[] pairs) {
     var ms = new MemoryStream();
     foreach (var s in pairs) {
-      byte[] b = Encoding.ASCII.GetBytes(s);
+      byte[] b = Encoding.UTF8.GetBytes(s);
       if (b.Length > 255) continue;
       ms.WriteByte((byte)b.Length); ms.Write(b, 0, b.Length);
     }
@@ -489,11 +519,11 @@ function Add-IppMore {
 }
 function Add-IppText {
     param($List, [byte]$Tag, [string]$Name, [string]$Value)
-    Add-IppNamed -List $List -Tag $Tag -Name $Name -ValueBytes ([Text.Encoding]::ASCII.GetBytes($Value))
+    Add-IppNamed -List $List -Tag $Tag -Name $Name -ValueBytes ([Text.Encoding]::UTF8.GetBytes($Value))
 }
 function Add-IppTextMore {
     param($List, [byte]$Tag, [string]$Value)
-    Add-IppMore -List $List -Tag $Tag -ValueBytes ([Text.Encoding]::ASCII.GetBytes($Value))
+    Add-IppMore -List $List -Tag $Tag -ValueBytes ([Text.Encoding]::UTF8.GetBytes($Value))
 }
 function Add-IppInt {
     param($List, [byte]$Tag, [string]$Name, [int]$Value)
@@ -530,11 +560,11 @@ function New-PrinterAttrs {
 
     # --- identity / URI ---
     Add-IppText $list 0x42 'printer-name' $script:ServiceInstance
-    Add-IppText $list 0x41 'printer-info' 'Studio LAN HP P1108'
+    Add-IppText $list 0x41 'printer-info' $script:Identity.PrinterInfo
     Add-IppText $list 0x41 'printer-location' 'Studio'
-    Add-IppText $list 0x41 'printer-make-and-model' 'HP LaserJet Professional P1108'
+    Add-IppText $list 0x41 'printer-make-and-model' $script:Identity.MakeAndModel
     Add-IppText $list 0x45 'printer-uuid' $uuid
-    Add-IppText $list 0x41 'printer-device-id' 'MFG:HP;MDL:LaserJet Professional P1108;CMD:PDF,PCL;CLS:PRINTER;DES:Studio-HP-LAN;'
+    Add-IppText $list 0x41 'printer-device-id' $script:Identity.DeviceId
 
     Add-IppText $list 0x45 'printer-uri-supported' ("ipp://{0}:{1}/ipp/print" -f $lan, $port)
     Add-IppTextMore $list 0x45 ("http://{0}:{1}/ipp/print" -f $lan, $port)
@@ -709,13 +739,13 @@ $txtPairs = @(
     'txtvers=1',
     'qtotal=1',
     'rp=ipp/print',
-    'ty=Studio HP LAN',
+    ('ty=' + $script:Identity.TxtTy),
     'note=Studio LAN Print',
-    'product=(Studio HP LAN)',
+    ('product=' + $script:Identity.TxtProduct),
     'pdl=application/pdf,text/plain',
     'priority=0',
-    'usb_MFG=HP',
-    'usb_MDL=LaserJet Professional P1108',
+    ('usb_MFG=' + $script:Identity.UsbMfg),
+    ('usb_MDL=' + $script:Identity.UsbMdl),
     ('adminurl=http://{0}:{1}/' -f $script:LanIp, $script:Port),
     'Transparent=F',
     'Binary=T',
@@ -802,7 +832,8 @@ try {
             $path = $req.Url.AbsolutePath.TrimEnd('/')
             if ($req.HttpMethod -eq 'GET' -and ($path -eq '/health' -or $path -eq '/healthz')) {
                 $mdnsState = if ($script:Mdns) { 'on' } else { 'off' }
-                $bytes = [Text.Encoding]::UTF8.GetBytes(('{{"status":"ok","printer":"{0}","port":{1},"queued":{2},"lan":"{3}","mdns":"{4}","service":"{5}"}}' -f $script:PrinterName, $script:Port, $script:Queue.Count, $script:LanIp, $mdnsState, $script:ServiceInstance))
+                $json = '{"status":"ok","printer":"' + (ConvertTo-StudioHealthText $script:PrinterName) + '","port":' + $script:Port + ',"queued":' + [int]$script:Queue.Count + ',"lan":"' + (ConvertTo-StudioHealthText $script:LanIp) + '","mdns":"' + $mdnsState + '","service":"' + (ConvertTo-StudioHealthText $script:ServiceInstance) + '","display":"' + (ConvertTo-StudioHealthText $script:DisplayName) + '"}'
+                $bytes = [Text.Encoding]::UTF8.GetBytes($json)
                 $res.ContentType = 'application/json'; $res.ContentLength64 = $bytes.Length; $res.OutputStream.Write($bytes,0,$bytes.Length)
             } elseif ($req.HttpMethod -eq 'GET') {
                 $bytes = [Text.Encoding]::UTF8.GetBytes("Studio LAN Print IPP + mDNS. POST /ipp/print`n")
